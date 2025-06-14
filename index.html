@@ -206,9 +206,11 @@
       if (!userInput) return;
       textInput.value = '';
       responseBox.textContent = "🤖 Thinking...";
+      circle.classList.add("listening");
       const reply = await fetchChatbotReply(userInput);
       responseBox.textContent = reply;
       await speakWithElevenLabs(reply);
+      circle.classList.remove("listening");
     }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -228,10 +230,11 @@
         }
 
         if (transcript.includes("hey mitra")) {
-          activated = true;
-          responseBox.textContent = "👂 Listening...";
+          if (!activated) {
+            activated = true;
+            responseBox.textContent = "👂 Activated. Talk to me.";
+          }
           circle.classList.add("listening");
-          setTimeout(() => circle.classList.remove("listening"), 3000);
         } else if (activated) {
           await handleTextInput(transcript);
         }
