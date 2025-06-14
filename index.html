@@ -57,8 +57,16 @@
       box-shadow: 0 0 20px #00f0ff, 0 0 40px #00f0ff, 0 0 80px #00f0ff;
       animation: rgbPulse 2s infinite;
     }
+    .circle.listening {
+      animation: wakeGlow 1s ease-in-out infinite;
+    }
     @keyframes rgbPulse {
       0%,25%,50%,75%,100% { box-shadow: 0 0 20px #ff0000, 0 0 40px #ff0000; }
+    }
+    @keyframes wakeGlow {
+      0% { box-shadow: 0 0 10px #00f0ff; }
+      50% { box-shadow: 0 0 20px #00ff99; }
+      100% { box-shadow: 0 0 10px #00f0ff; }
     }
     .circle-text {
       font-size: 1.5rem;
@@ -120,7 +128,7 @@
       <div class="circle-border"></div>
       <div class="circle" id="ai-circle"><div class="circle-text">Mitra</div></div>
     </div>
-    <div class="intro-text">🎙 I’m Mitra. Say "Hey Mitra" to talk.</div>
+    <div class="intro-text">🎙 I’m Mitra. Say "Hey Mitra" anytime to talk.</div>
     <div id="response" class="response-box">...</div>
     <div class="text-command">
       <input type="text" id="textInput" placeholder="Type here..." />
@@ -134,13 +142,8 @@
     const textInput = document.getElementById('textInput');
     const ELEVEN_API_KEY = "sk_b199dcd91c7f700e2b15474201d3a9daec996990c451839a";
     const VOICE_ADAM = "pNInz6obpgDQGcFmaJgB";
-
-    const musicLibrary = {
-      "fluffing a duck": "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/Music_for_Video/Kevin_MacLeod/Comic_Mischief/Kevin_MacLeod_-_Fluffing_a_Duck.mp3",
-      "sneaky snitch": "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/Music_for_Video/Kevin_MacLeod/Cartoon_Bank_Heist/Kevin_MacLeod_-_Sneaky_Snitch.mp3"
-    };
-    let currentSong = null;
-    let currentSpeechAudio = null;
+    let currentAudio = null;
+    let activated = false;
 
     async function fetchChatbotReply(text) {
       try {
@@ -153,7 +156,7 @@
           body: JSON.stringify({
             model: "mistral-small",
             messages: [
-              { role: "system", content: "You are Mitra, an AI assistant. Reply in a friendly tone. Do not introduce yourself every time." },
+              { role: "system", content: "You are Mitra, an AI assistant. Reply in a friendly tone." },
               { role: "user", content: text }
             ]
           })
@@ -167,10 +170,11 @@
     }
 
     async function speakWithElevenLabs(text) {
-      if (currentSpeechAudio) {
-        currentSpeechAudio.pause();
-        currentSpeechAudio = null;
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
       }
+
       const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ADAM}`, {
         method: 'POST',
         headers: {
@@ -191,40 +195,16 @@
       }
 
       const blob = await res.blob();
-      currentSpeechAudio = new Audio(URL.createObjectURL(blob));
-      currentSpeechAudio.onplay = () => circle.classList.add("speaking");
-      currentSpeechAudio.onended = () => circle.classList.remove("speaking");
-      currentSpeechAudio.play();
-    }
-
-    function playMusic(name) {
-      if (musicLibrary[name]) {
-        if (currentSong) currentSong.pause();
-        currentSong = new Audio(musicLibrary[name]);
-        currentSong.oncanplaythrough = () => {
-          currentSong.play().catch(err => {
-            console.error("Autoplay blocked:", err);
-            responseBox.textContent = "⚠️ Click anywhere to enable audio.";
-          });
-        };
-        responseBox.textContent = `🎵 Playing ${name}`;
-        speakWithElevenLabs(`Playing ${name}`);
-      } else {
-        responseBox.textContent = "❌ Song not found.";
-        speakWithElevenLabs("Sorry, I couldn't find that song.");
-      }
+      currentAudio = new Audio(URL.createObjectURL(blob));
+      currentAudio.onplay = () => circle.classList.add("speaking");
+      currentAudio.onended = () => circle.classList.remove("speaking");
+      currentAudio.play();
     }
 
     async function handleTextInput(text) {
       const userInput = text || textInput.value.trim();
       if (!userInput) return;
       textInput.value = '';
-
-      if (userInput.toLowerCase().startsWith("play ")) {
-        playMusic(userInput.substring(5).toLowerCase());
-        return;
-      }
-
       responseBox.textContent = "🤖 Thinking...";
       const reply = await fetchChatbotReply(userInput);
       responseBox.textContent = reply;
@@ -238,25 +218,22 @@
       recog.continuous = true;
       recog.interimResults = false;
 
-      let wakeTriggered = false;
-
       recog.onresult = async e => {
         const transcript = e.results[e.results.length - 1][0].transcript.trim().toLowerCase();
         console.log("Heard:", transcript);
 
-        if (currentSpeechAudio && !currentSpeechAudio.paused) {
-          currentSpeechAudio.pause();
+        if (currentAudio && !currentAudio.paused) {
+          currentAudio.pause();
           circle.classList.remove("speaking");
         }
 
-        if (!wakeTriggered && transcript.includes("hey mitra")) {
-          wakeTriggered = true;
-          circle.classList.add("speaking");
-          responseBox.textContent = "👂 Listening... Speak now.";
-        } else if (wakeTriggered) {
-          wakeTriggered = false;
+        if (transcript.includes("hey mitra")) {
+          activated = true;
+          responseBox.textContent = "👂 Listening...";
+          circle.classList.add("listening");
+          setTimeout(() => circle.classList.remove("listening"), 3000);
+        } else if (activated) {
           await handleTextInput(transcript);
-          circle.classList.remove("speaking");
         }
       };
 
