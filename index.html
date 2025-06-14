@@ -120,7 +120,7 @@
       <div class="circle-border"></div>
       <div class="circle" id="ai-circle"><div class="circle-text">Mitra</div></div>
     </div>
-    <div class="intro-text">🎙 I’m Mitra. Speak or Type.</div>
+    <div class="intro-text">🎙 I’m Mitra. Say "Hey Mitra" to talk.</div>
     <div id="response" class="response-box">...</div>
     <div class="text-command">
       <input type="text" id="textInput" placeholder="Type here..." />
@@ -132,44 +132,28 @@
     const circle = document.getElementById('ai-circle');
     const responseBox = document.getElementById('response');
     const textInput = document.getElementById('textInput');
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const ELEVEN_API_KEY = "sk_b199dcd91c7f700e2b15474201d3a9daec996990c451839a";
+    const VOICE_ADAM = "pNInz6obpgDQGcFmaJgB";
 
-    const ELEVEN_API_KEY = "sk_b199dcd91c7f700e2b15474201d3a9daec996990c451839a"; // ✅ Your working key
-    const VOICE_ENGLISH = "pNInz6obpgDQGcFmaJgB"; // ✅ Adam (free)
-    const VOICE_HINDI = "cA7uzZlCjwGEkoIQu7gK"; // Optional Hindi voice
-
-    const songs = {
-      "shape of you": "https://ia800504.us.archive.org/15/items/EdSheeranShapeOfYou_201701/Ed%20Sheeran%20-%20Shape%20Of%20You.mp3",
-      "believer": "https://ia801006.us.archive.org/6/items/ImagineDragonsBeliever_201904/Imagine%20Dragons%20-%20Believer.mp3",
-      "senorita": "https://ia803008.us.archive.org/16/items/ShawnMendesCamilaCabelloSenorita/Shawn%20Mendes%20%26%20Camila%20Cabello%20-%20Se%C3%B1orita.mp3"
+    const musicLibrary = {
+      "fluffing a duck": "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/Music_for_Video/Kevin_MacLeod/Comic_Mischief/Kevin_MacLeod_-_Fluffing_a_Duck.mp3",
+      "sneaky snitch": "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/Music_for_Video/Kevin_MacLeod/Cartoon_Bank_Heist/Kevin_MacLeod_-_Sneaky_Snitch.mp3"
     };
-
-    let currentMusic = new Audio();
-
-    function isHindi(text) {
-      return /[\u0900-\u097F]/.test(text) ||
-             /namaste|kya|kaise|tum|aap|kaun|haan|nahi/.test(text.toLowerCase());
-    }
+    let currentSong = null;
 
     async function fetchChatbotReply(text) {
       try {
-        const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
-          method: 'POST',
+        const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer your_mistral_api_key' // Replace with real key if using Mistral
+            "Content-Type": "application/json",
+            "Authorization": "Bearer dzcc5iDwSLj587WA8YWroFfXbyci3Xch"
           },
           body: JSON.stringify({
-            model: 'mistral-small',
+            model: "mistral-small",
             messages: [
-              {
-                role: 'system',
-                content: "You are Mitra, an AI assistant. Reply in a friendly tone. Do not introduce yourself every time."
-              },
-              {
-                role: 'user',
-                content: text
-              }
+              { role: "system", content: "You are Mitra, an AI assistant. Reply in a friendly tone. Do not introduce yourself every time." },
+              { role: "user", content: text }
             ]
           })
         });
@@ -181,9 +165,8 @@
       }
     }
 
-    async function speakWithElevenLabs(text, isHindiLang) {
-      const voice = isHindiLang ? VOICE_HINDI : VOICE_ENGLISH;
-      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}`, {
+    async function speakWithElevenLabs(text) {
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ADAM}`, {
         method: 'POST',
         headers: {
           'xi-api-key': ELEVEN_API_KEY,
@@ -209,71 +192,75 @@
       audio.play();
     }
 
-    function playSong(songName) {
-      const name = songName.toLowerCase();
-      if (songs[name]) {
-        currentMusic.pause();
-        currentMusic = new Audio(songs[name]);
-        currentMusic.play();
-        responseBox.textContent = `🎵 Playing ${songName}`;
-        speakWithElevenLabs(`Playing ${songName}`, false);
+    function playMusic(name) {
+      if (musicLibrary[name]) {
+        if (currentSong) currentSong.pause();
+        currentSong = new Audio(musicLibrary[name]);
+        currentSong.oncanplaythrough = () => {
+          currentSong.play().catch(err => {
+            console.error("Autoplay blocked:", err);
+            responseBox.textContent = "⚠️ Click anywhere to enable audio.";
+          });
+        };
+        responseBox.textContent = `🎵 Playing ${name}`;
+        speakWithElevenLabs(`Playing ${name}`);
       } else {
-        responseBox.textContent = "Song not found.";
-        speakWithElevenLabs("Sorry, I couldn't find that song.", false);
+        responseBox.textContent = "❌ Song not found.";
+        speakWithElevenLabs("Sorry, I couldn't find that song.");
       }
     }
 
-    function handleCommand(text) {
-      if (text.toLowerCase().startsWith("play ")) {
-        const songName = text.slice(5).trim();
-        playSong(songName);
-        return true;
-      }
-      return false;
-    }
-
-    async function handleTextInput() {
-      const userInput = textInput.value.trim();
+    async function handleTextInput(text) {
+      const userInput = text || textInput.value.trim();
       if (!userInput) return;
       textInput.value = '';
-      responseBox.textContent = "🤖 Thinking...";
 
-      if (!handleCommand(userInput)) {
-        const reply = await fetchChatbotReply(userInput);
-        responseBox.textContent = reply;
-        await speakWithElevenLabs(reply, isHindi(userInput));
+      if (userInput.toLowerCase().startsWith("play ")) {
+        playMusic(userInput.substring(5).toLowerCase());
+        return;
       }
+
+      responseBox.textContent = "🤖 Thinking...";
+      const reply = await fetchChatbotReply(userInput);
+      responseBox.textContent = reply;
+      await speakWithElevenLabs(reply);
     }
 
-    textInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") handleTextInput();
-    });
-
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recog = new SpeechRecognition();
       recog.lang = 'en-IN';
       recog.continuous = true;
       recog.interimResults = false;
 
-      recog.onstart = () => console.log("🎤 Listening...");
-      recog.onresult = async e => {
-        const userInput = e.results[e.results.length - 1][0].transcript.trim();
-        console.log("User said:", userInput);
-        responseBox.textContent = "🤖 Thinking...";
+      let wakeTriggered = false;
 
-        if (!handleCommand(userInput)) {
-          const reply = await fetchChatbotReply(userInput);
-          responseBox.textContent = reply;
-          await speakWithElevenLabs(reply, isHindi(userInput));
+      recog.onresult = async e => {
+        const transcript = e.results[e.results.length - 1][0].transcript.trim().toLowerCase();
+        console.log("Heard:", transcript);
+
+        if (!wakeTriggered && transcript.includes("hey mitra")) {
+          wakeTriggered = true;
+          circle.classList.add("speaking");
+          responseBox.textContent = "👂 Listening... Speak now.";
+        } else if (wakeTriggered) {
+          wakeTriggered = false;
+          await handleTextInput(transcript);
+          circle.classList.remove("speaking");
         }
       };
 
-      recog.onerror = console.error;
+      recog.onerror = e => console.error("Recognition Error:", e);
       recog.onend = () => recog.start();
       recog.start();
     } else {
-      alert('Your browser does not support speech recognition.');
+      alert("Speech Recognition not supported on this browser.");
     }
+
+    textInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") handleTextInput();
+    });
   </script>
 </body>
 </html>
+
