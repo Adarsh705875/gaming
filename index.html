@@ -140,6 +140,7 @@
       "sneaky snitch": "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/Music_for_Video/Kevin_MacLeod/Cartoon_Bank_Heist/Kevin_MacLeod_-_Sneaky_Snitch.mp3"
     };
     let currentSong = null;
+    let currentSpeechAudio = null;
 
     async function fetchChatbotReply(text) {
       try {
@@ -166,6 +167,10 @@
     }
 
     async function speakWithElevenLabs(text) {
+      if (currentSpeechAudio) {
+        currentSpeechAudio.pause();
+        currentSpeechAudio = null;
+      }
       const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ADAM}`, {
         method: 'POST',
         headers: {
@@ -186,10 +191,10 @@
       }
 
       const blob = await res.blob();
-      const audio = new Audio(URL.createObjectURL(blob));
-      audio.onplay = () => circle.classList.add("speaking");
-      audio.onended = () => circle.classList.remove("speaking");
-      audio.play();
+      currentSpeechAudio = new Audio(URL.createObjectURL(blob));
+      currentSpeechAudio.onplay = () => circle.classList.add("speaking");
+      currentSpeechAudio.onended = () => circle.classList.remove("speaking");
+      currentSpeechAudio.play();
     }
 
     function playMusic(name) {
@@ -239,6 +244,11 @@
         const transcript = e.results[e.results.length - 1][0].transcript.trim().toLowerCase();
         console.log("Heard:", transcript);
 
+        if (currentSpeechAudio && !currentSpeechAudio.paused) {
+          currentSpeechAudio.pause();
+          circle.classList.remove("speaking");
+        }
+
         if (!wakeTriggered && transcript.includes("hey mitra")) {
           wakeTriggered = true;
           circle.classList.add("speaking");
@@ -263,4 +273,3 @@
   </script>
 </body>
 </html>
-
