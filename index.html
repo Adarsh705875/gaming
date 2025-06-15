@@ -140,24 +140,30 @@
     const circle = document.getElementById('ai-circle');
     const responseBox = document.getElementById('response');
     const textInput = document.getElementById('textInput');
-    const ELEVEN_API_KEY = "sk_b199dcd91c7f700e2b15474201d3a9daec996990c451839a";
+    const ELEVEN_API_KEY = "sk_b112dc6de076cc947db97977d837004e736baa0466103eea";
     const VOICE_ADAM = "pNInz6obpgDQGcFmaJgB";
     let currentAudio = null;
     let activated = false;
+    let isSpeaking = false;
 
     async function fetchChatbotReply(text) {
       try {
-        const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+        const translateMode = text.toLowerCase().startsWith("translate");
+        const prompt = translateMode ?
+          `Translate this into English: ${text.replace(/^translate\s*/, '')}` :
+          text;
+
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer dzcc5iDwSLj587WA8YWroFfXbyci3Xch"
+            "Authorization": "Bearer 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"
           },
           body: JSON.stringify({
-            model: "mistral-small",
+            model: "mistralai/mistral-7b-instruct",
             messages: [
-              { role: "system", content: "You are Mitra, an AI assistant. Reply in a friendly tone." },
-              { role: "user", content: text }
+              { role: "system", content: "You are Mitra, a smart and friendly AI assistant. Keep your tone human and casual. Do not translate unless explicitly asked with the word 'translate'." },
+              { role: "user", content: prompt }
             ]
           })
         });
@@ -170,11 +176,6 @@
     }
 
     async function speakWithElevenLabs(text) {
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio = null;
-      }
-
       const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ADAM}`, {
         method: 'POST',
         headers: {
@@ -196,8 +197,12 @@
 
       const blob = await res.blob();
       currentAudio = new Audio(URL.createObjectURL(blob));
+      isSpeaking = true;
       currentAudio.onplay = () => circle.classList.add("speaking");
-      currentAudio.onended = () => circle.classList.remove("speaking");
+      currentAudio.onended = () => {
+        circle.classList.remove("speaking");
+        isSpeaking = false;
+      };
       currentAudio.play();
     }
 
@@ -221,13 +226,9 @@
       recog.interimResults = false;
 
       recog.onresult = async e => {
+        if (isSpeaking) return;
         const transcript = e.results[e.results.length - 1][0].transcript.trim().toLowerCase();
         console.log("Heard:", transcript);
-
-        if (currentAudio && !currentAudio.paused) {
-          currentAudio.pause();
-          circle.classList.remove("speaking");
-        }
 
         if (transcript.includes("hey mitra")) {
           if (!activated) {
@@ -236,12 +237,16 @@
           }
           circle.classList.add("listening");
         } else if (activated) {
+          recog.stop();
           await handleTextInput(transcript);
+          recog.start();
         }
       };
 
       recog.onerror = e => console.error("Recognition Error:", e);
-      recog.onend = () => recog.start();
+      recog.onend = () => {
+        if (!isSpeaking) recog.start();
+      };
       recog.start();
     } else {
       alert("Speech Recognition not supported on this browser.");
